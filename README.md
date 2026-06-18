@@ -1,4 +1,4 @@
-# OpenFOAM -- Airfoil -- Workflow
+# Workflow for airfoils with OpenFOAM
 
 A reproducible and automated OpenFOAM workflow for aerodynamic studies of NACA airfoils.
 
