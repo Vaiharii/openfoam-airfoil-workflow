@@ -438,5 +438,5 @@ if __name__ == "__main__":
         input_path=input_path,
         output_path=output_path,
         chord=1,
-        span=0.5,
+        span=0.1,
     )
