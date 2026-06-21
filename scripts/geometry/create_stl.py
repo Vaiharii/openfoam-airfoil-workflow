@@ -366,7 +366,7 @@ def create_airfoil_stl_from_dat(
     )
 
 if __name__ == "__main__":
-    input_path = Path("airfoils/database/naca4/naca0008.dat")
+    input_path = Path("airfoils/database/naca4/naca0012.dat")
     output_path = Path("airfoils/generated/geometry.stl")
     create_airfoil_stl_from_dat(
         input_path=input_path,
