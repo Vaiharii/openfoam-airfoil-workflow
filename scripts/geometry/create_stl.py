@@ -51,6 +51,11 @@ def read_airfoil_dat(path: Path | str) -> np.ndarray:
         If fewer than three valid points are found.
     """
     path = Path(path)
+    print()
+    print("=" * 80)
+    print("READ AIRFOIL DAT")
+    print("=" * 80)
+    print(f"Input file : {path}")
     if not path.is_file():
         raise FileNotFoundError(f"Airfoil file not found: {path}")
     points = []
@@ -71,7 +76,8 @@ def read_airfoil_dat(path: Path | str) -> np.ndarray:
             f"At least three valid points are required to define an airfoil. "
             f"Only {len(points)} valid point(s) found in {path}."
         )
-    
+    print(f"Number of points found : {len(points)}")
+    print("Done.")
     return points
 
 def remove_duplicate_closing_point(points: np.ndarray) -> np.ndarray:
@@ -92,9 +98,15 @@ def remove_duplicate_closing_point(points: np.ndarray) -> np.ndarray:
     np.ndarray
         Airfoil coordinates without a duplicated closing point.
     """
+    print()
+    print("=" * 80)
+    print("REMOVE DUPLICATE CLOSING POINT")
+    print("=" * 80)
     if np.allclose(points[0], points[-1]):
+        print("Duplicate point detected.")
+        print("Removing last point.")
         return points[:-1]
-    
+    print("No duplicate point found.")
     return points
 
 def scale_airfoil(points: np.ndarray, chord: float = 1.0) -> np.ndarray:
@@ -126,8 +138,22 @@ def scale_airfoil(points: np.ndarray, chord: float = 1.0) -> np.ndarray:
     """
     if chord <= 0:
         raise ValueError(f"Chord must be strictly positive. Got chord={chord}.")
-    
-    return points * chord
+    print()
+    print("=" * 80)
+    print("SCALE AIRFOIL")
+    print("=" * 80)
+    print(f"Chord = {chord} m")
+    print()
+    print("Before scaling:")
+    print(f"x_min = {points[:,0].min()}")
+    print(f"x_max = {points[:,0].max()}")
+    scaled_points = points * chord
+    print()
+    print("After scaling:")
+    print(f"x_min = {scaled_points[:,0].min()}")
+    print(f"x_max = {scaled_points[:,0].max()}")
+    print("Done.")
+    return scaled_points
 
 def build_front_and_back_faces(
     points: np.ndarray,
@@ -160,12 +186,20 @@ def build_front_and_back_faces(
     ValueError
         If the span is not strictly positive.
     """
+    print()
+    print("=" * 80)
+    print("BUILD FRONT AND BACK FACES")
+    print("=" * 80)
+    print(f"Span = {span} m")
+    print(f"Number of points = {len(points)}")
     if span <= 0:
         raise ValueError(f"Span must be strictly positive. Got span={span}.")
     n_points = len(points)
     front = np.column_stack((points[:, 0], points[:, 1], np.full(n_points, -span/2)))
     back = np.column_stack((points[:, 0], points[:, 1], np.full(n_points, span/2)))
-
+    print(f"Front plane z = {-span/2}")
+    print(f"Back plane z = {span/2}")
+    print("Done.")
     return front, back
 
 def create_lateral_triangles(
@@ -192,13 +226,18 @@ def create_lateral_triangles(
         List of triangular faces. Each triangle is represented by three
         3D points.
     """
+    print()
+    print("=" * 80)
+    print("CREATE LATERAL TRIANGLES")
+    print("=" * 80)
     n_points = len(front)
     triangles = []
     for i in range(n_points):
         j = (i + 1) % n_points
         triangles.append([front[i], front[j], back[j]])
         triangles.append([front[i], back[j], back[i]])
-
+    print(f"Number of lateral triangles : {len(triangles)}")
+    print("Done.")
     return triangles
 
 def create_cap_triangles(
@@ -230,6 +269,11 @@ def create_cap_triangles(
     list[list[np.ndarray]]
         List of triangular faces.
     """
+    print()
+    print("=" * 80)
+    print("CREATE CAP TRIANGLES")
+    print("=" * 80)
+    print(f"Reverse orientation : {reverse}")
     n_points = len(face)
     center = np.mean(face, axis=0)
     triangles = []
@@ -239,7 +283,8 @@ def create_cap_triangles(
             triangles.append([center, face[j], face[i]])
         else:
             triangles.append([center, face[i], face[j]])
-
+    print(f"Number of cap triangles : {len(triangles)}")
+    print("Done.")
     return triangles
 
 def write_stl(
@@ -268,6 +313,11 @@ def write_stl(
     ValueError
         If no triangle is provided.
     """
+    print()
+    print("=" * 80)
+    print("WRITE STL")
+    print("=" * 80)
+    print(f"Output path : {output_path}")
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if len(triangles) == 0:
@@ -275,7 +325,10 @@ def write_stl(
     stl_mesh = mesh.Mesh(np.zeros(len(triangles), dtype=mesh.Mesh.dtype))
     for i, triangle in enumerate(triangles):
         stl_mesh.vectors[i] = np.asarray(triangle, dtype=float)
+    print(f"Number of triangles : {len(triangles)}")
+    print("Saving STL...")
     stl_mesh.save(str(output_path))
+    print("Done.")
 
 def create_airfoil_stl(
     points: np.ndarray,
@@ -314,18 +367,31 @@ def create_airfoil_stl(
     None
         The STL file is written to disk.
     """
+    print()
+    print("#" * 80)
+    print("CREATE AIRFOIL STL")
+    print("#" * 80)
     if points.ndim != 2 or points.shape[1] != 2:
         raise ValueError("points must be a 2D NumPy array with shape (n_points, 2).")
     if len(points) < 3:
         raise ValueError("At least three points are required to create an airfoil STL.")
+    print("Step 1/5 : remove duplicate closing point")
     points = remove_duplicate_closing_point(points)
+    print("Step 2/5 : scale airfoil")
     points = scale_airfoil(points, chord=chord)
+    print("Step 3/5 : build front and back faces")
     front, back = build_front_and_back_faces(points, span=span)
+    print("Step 4/5 : create triangles")
     triangles = []
     triangles.extend(create_lateral_triangles(front, back))
     triangles.extend(create_cap_triangles(front, reverse=True))
     triangles.extend(create_cap_triangles(back, reverse=False))
+    print("Step 5/5 : write STL")
     write_stl(triangles, output_path)
+    print()
+    print("#" * 80)
+    print("END OF STL CREATION")
+    print("#" * 80)
 
 def create_airfoil_stl_from_dat(
     input_path: Path | str,
@@ -371,6 +437,6 @@ if __name__ == "__main__":
     create_airfoil_stl_from_dat(
         input_path=input_path,
         output_path=output_path,
-        chord=0.65,
-        span=0.05,
+        chord=1,
+        span=0.5,
     )
