@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+rm -rf processor*
+rm -rf constant/polyMesh
+rm -rf postProcessing
+rm -rf [1-9]*
+rm -f log.*
+rm -f .meshdone .samplingdone .runsdone .postdone .caseprepared .casedone .casefailed

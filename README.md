@@ -1,338 +1,223 @@
 # OpenFOAM Airfoil Workflow
 
-Automated Python workflow for CFD studies of airfoil geometries using OpenFOAM.
+Automated Python workflow for CFD campaigns on NACA airfoils with OpenFOAM.
 
-This project aims to automate the generation, meshing and execution of CFD simulations for airfoil profiles. Starting from a reference OpenFOAM case, the workflow selects a geometry, inserts it into the case, generates the mesh, creates a set of simulation cases from a sampling definition, launches the computations and prepares the structure for future post-processing.
+The workflow reads the INI files in `parameters/`, selects an airfoil, creates
+the STL, prepares OpenFOAM cases, optionally launches meshing and simulations,
+then collects post-processing outputs into `results/`.
 
-The workflow is designed for reproducible parametric studies, turbulence model comparisons and future uncertainty quantification campaigns.
+The current database contains NACA 4-digit profiles. The code is structured for
+future `naca5`, `naca6`, or custom `.dat` profile sources.
 
----
+## Quick Start
 
-## 1. Project objective
-
-The objective is to build a robust and reproducible CFD pipeline for airfoil studies.
-
-The current workflow supports:
-
-* selection of an airfoil geometry;
-* automatic insertion of the STL geometry into a base OpenFOAM case;
-* mesh generation from the base case;
-* duplication of the meshed case into several simulation samples;
-* automatic creation of a sampling database;
-* execution of the generated simulations;
-* use of marker files to avoid repeating completed steps.
-
-Post-processing is not yet implemented and will be added later.
-
----
-
-## 2. General workflow
-
-The workflow follows the sequence:
-
-```text
-Base OpenFOAM case
-        ↓
-Geometry selection
-        ↓
-STL copied as geometry.stl
-        ↓
-Mesh generation
-        ↓
-Reference meshed case
-        ↓
-Sampling generation
-        ↓
-Case generation in runs/
-        ↓
-Simulation execution
-        ↓
-Post-processing
-```
-
-The important idea is that the base case acts as a clean template. The selected geometry is inserted into this case, the mesh is generated once, and the resulting meshed case is then copied and modified according to the requested samples.
-
----
-
-## 3. Directory structure
-
-```text
-openfoam-airfoil-workflow/
-
-├── airfoils/
-│   ├── database/
-│   └── generated/
-│
-├── base_cases/
-│   └── simpleFoam/
-│
-├── parameters/
-│   ├── parameters_geometry.ini
-│   ├── parameters_mesh.ini
-│   ├── parameters_sampling.ini
-│   ├── parameters_runs.ini
-│   └── parameters_post.ini
-│
-├── runs/
-│   └── study_name/
-│       ├── case_000/
-│       ├── case_001/
-│       ├── case_002/
-│       ├── sampling.csv
-│       └── sampling.txt
-│
-├── results/
-│   └── study_name/
-│
-├── scripts/
-│   ├── geometry/
-│   ├── mesh/
-│   ├── sampling/
-│   ├── cases/
-│   ├── runs/
-│   ├── post/
-│   └── utils/
-│
-├── main.py
-└── README.md
-```
-
----
-
-## 4. Geometry handling
-
-The selected airfoil geometry must be available as an STL file.
-
-During the workflow, the geometry is copied into the OpenFOAM case under:
-
-```text
-constant/triSurface/geometry.stl
-```
-
-All geometries are renamed internally as:
-
-```text
-geometry.stl
-```
-
-This avoids hard-coding the airfoil name inside OpenFOAM dictionaries such as:
-
-```text
-snappyHexMeshDict
-surfaceFeatureExtractDict
-```
-
-This also makes the base case reusable for different profiles without manually editing the OpenFOAM setup.
-
----
-
-## 5. Mesh generation
-
-The mesh is generated from the base case after insertion of the selected geometry.
-
-Typical OpenFOAM commands are:
+Install the Python dependency used by the STL generator:
 
 ```bash
-blockMesh
-surfaceFeatureExtract
-snappyHexMesh -overwrite
-checkMesh
+pip install -r requirements.txt
 ```
 
-After successful mesh generation, the marker file:
-
-```text
-.meshdone
-```
-
-is created inside the meshed reference case.
-
-This file indicates that the mesh generation step has already been completed.
-
----
-
-## 6. Sampling and case generation
-
-Once the reference mesh is available, the workflow creates the requested number of simulation cases.
-
-Each generated case is copied into:
-
-```text
-runs/study_name/
-```
-
-with the structure:
-
-```text
-runs/study_name/
-
-├── case_000/
-├── case_001/
-├── case_002/
-└── ...
-```
-
-Each case corresponds to one sample of the study.
-
-The variable parameters may include, for example:
-
-* angle of attack;
-* inlet velocity;
-* Reynolds number;
-* turbulence model;
-* turbulence intensity;
-* numerical schemes;
-* mesh settings;
-* physical properties.
-
-The workflow also creates two summary files.
-
-### sampling.csv
-
-Machine-readable file containing all generated samples and their parameter values.
-
-Example:
-
-```csv
-case,airfoil,alpha,Uinf,Re,turbulence_model
-case_000,naca4412,0,20,1000000,kOmegaSST
-case_001,naca4412,2,20,1000000,kOmegaSST
-case_002,naca4412,4,20,1000000,kOmegaSST
-```
-
-### sampling.txt
-
-Human-readable file describing the study.
-
-It summarizes:
-
-* selected geometry;
-* base case;
-* solver;
-* turbulence model;
-* number of samples;
-* variable parameters;
-* parameter ranges;
-* date of generation.
-
-After the sampling and case generation stage is completed, the marker file:
-
-```text
-.samplingdone
-```
-
-is created.
-
----
-
-## 7. Simulation execution
-
-The generated cases can then be executed automatically.
-
-Depending on the configuration, simulations may be launched:
-
-* sequentially;
-* locally in parallel;
-* on an HPC cluster;
-* through a job scheduler such as SLURM.
-
-After all simulations have been completed, the marker file:
-
-```text
-.runsdone
-```
-
-is created.
-
-This indicates that the simulation campaign has finished.
-
----
-
-## 8. Marker files
-
-Marker files are used to make the workflow restartable.
-
-| Marker file     | Meaning                                               |
-| --------------- | ----------------------------------------------------- |
-| `.meshdone`     | The reference mesh has been generated successfully    |
-| `.samplingdone` | The simulation cases have been generated successfully |
-| `.runsdone`     | The simulations have been executed successfully       |
-| `.postdone`     | The post-processing has been completed                |
-
-The marker files allow the workflow to restart from the last completed stage without repeating expensive operations.
-
----
-
-## 9. Recommended execution logic
-
-A typical execution order is:
+Prepare the full campaign without executing OpenFOAM:
 
 ```bash
+python main.py --all
+```
+
+Validate parameters and input files without generating cases:
+
+```bash
+python main.py --validate
+```
+
+This creates:
+
+```text
+airfoils/generated/geometry.stl
+runs/<study>/_mesh_reference/
+runs/<study>/case_000/
+runs/<study>/case_001/
+runs/<study>/sampling.csv
+results/<study>/summary.csv
+```
+
+Run selected stages:
+
+```bash
+python main.py --geometry
 python main.py --mesh
 python main.py --sample
 python main.py --run
 python main.py --post
 ```
 
-or, once the workflow is mature:
+Force regeneration:
 
 ```bash
-python main.py --all
+python main.py --all --force
 ```
 
-The workflow should always check whether a marker file already exists before running a step.
+Execute OpenFOAM commands regardless of the INI execution flags:
 
-For example:
+```bash
+python main.py --mesh --execute-openfoam
+python main.py --run --execute-openfoam
+```
+
+## Parameters
+
+All user-facing configuration lives in `parameters/`.
+
+| File | Purpose |
+| --- | --- |
+| `parameters_geometry.ini` | Airfoil family/code, chord, span, STL output. |
+| `parameters_mesh.ini` | Base case, domain size, `snappyHexMesh` controls, mesh commands. |
+| `parameters_sampling.ini` | Study name and sampled values: alpha, velocity, Reynolds, turbulence model, etc. |
+| `parameters_runs.ini` | Execution mode: `prepare_only`, `local`, or `slurm`; CPUs; solver; time controls. |
+| `parameters_post.ini` | Requested function objects and post-processing outputs. |
+
+Most lists are comma-separated. Mesh commands are semicolon-separated.
+
+Example alpha sweep:
+
+```ini
+[sampling]
+alpha_deg = -4, 0, 4, 8, 12
+u_inf = 20.0
+reynolds = 1000000
+turbulence_model = kOmegaSST
+```
+
+## Execution Modes
+
+`prepare_only` is the safe default. It writes cases and scripts but does not call
+OpenFOAM.
+
+For local execution, set:
+
+```ini
+[execution]
+mode = local
+execute = true
+n_processors = 4
+parallel = auto
+max_workers = 1
+
+[mesh]
+execute = true
+```
+
+With `n_processors > 1`, simulation scripts use:
 
 ```text
-if .meshdone exists:
-    skip mesh generation
-else:
-    generate mesh
+decomposePar -force
+mpirun -np <n_processors> simpleFoam -parallel
+reconstructPar
 ```
 
-This makes the pipeline safer, faster and easier to restart.
+For a cluster, set:
 
----
+```ini
+[execution]
+mode = slurm
+execute = true
 
-## 10. Current status
+[slurm]
+submit = true
+partition = your_partition
+time = 02:00:00
+```
 
-The current version focuses on the first stages of the workflow:
+The workflow writes `submit.slurm` in each case directory and can submit it with
+`sbatch`.
 
-* base case preparation;
-* STL geometry insertion;
-* mesh generation;
-* sample generation;
-* case duplication;
-* simulation launch.
+## Workflow Stages
 
-The post-processing stage is planned but not yet implemented.
+1. Geometry
+   - Reads the selected `.dat` profile from `airfoils/database/<family>/`.
+   - Writes `airfoils/generated/geometry.stl`.
+   - Optionally writes a named STL such as `naca4412.stl`.
+   - Copies the canonical STL into `constant/triSurface/geometry.stl`.
 
----
+2. Mesh
+   - Copies `base_cases/simpleFoam_airfoil` into
+     `runs/<study>/_mesh_reference`.
+   - Writes OpenFOAM dictionaries for `blockMesh`, `surfaceFeatureExtract`,
+     `snappyHexMesh`, `checkMesh`, fields, turbulence and function objects.
+   - Uses `snappyHexMesh` distance refinement around the airfoil and runs
+     `checkMesh -allTopology -allGeometry -writeSets vtk`.
+   - When `[mesh_auto] enabled = true`, rejects meshes below the configured
+     cell target or with failed mesh checks, adjusts obvious refinement/snap
+     parameters, and retries. Attempts are recorded in
+     `runs/<study>/_mesh_reference/mesh_attempts.json`.
+   - When `[mesh_auto] estimate_from_stl = true`, the exact STL is read before
+     meshing. The workflow estimates the background domain, base cell counts,
+     `locationInMesh`, surface levels, and distance refinement distances from
+     the STL bounds and edge sizes.
+   - With `[local_refinement] enabled = true`, checkMesh error coordinates or
+     VTK error sets are converted into local `searchableBox` refinement regions
+     for the next attempt. This lets the mesh adapt to skewness/non-orthogonality
+     issues instead of only refining globally.
+   - Runs mesh commands only when execution is enabled.
 
-## 11. Planned post-processing features
+3. Sampling and case generation
+   - Builds a Cartesian product of sampled parameters.
+   - Creates `case_000`, `case_001`, ...
+   - Writes per-case `0/`, `constant/`, `system/`, `Allrun`, `Allrun.mesh`,
+     and `case_parameters.json`.
+   - Writes `sampling.csv`, `sampling.txt`, and `campaign.json`.
 
-Future developments will include:
+4. Run
+   - Prepares local or SLURM execution scripts.
+   - Optionally launches `simpleFoam`.
+   - Supports MPI decomposition and multiple local case workers.
 
-* automatic extraction of lift, drag and moment coefficients;
-* computation of aerodynamic polars;
-* pressure coefficient distributions;
-* wall quantities such as y+;
-* convergence analysis;
-* residual extraction;
-* force coefficient histories;
-* automatic database generation;
-* comparison between airfoils;
-* uncertainty quantification;
-* Sobol sensitivity analysis;
-* automatic figure generation.
+5. Post
+   - Reads available `forceCoeffs`, `yPlus`, residual files, and solver logs.
+   - Writes `results/<study>/summary.csv`, `case_status.csv`, and
+     `post_report.md`.
+   - Missing solver outputs are handled gracefully, so prepared-only campaigns
+     still produce a useful status table.
 
----
+## Restart Markers
 
-## 12. Long-term objective
+Generated folders use marker files to avoid repeating expensive steps.
 
-The long-term objective is to develop a reusable CFD automation framework for airfoil studies.
+| Marker | Meaning |
+| --- | --- |
+| `.meshprepared` | Reference mesh case was prepared but not meshed. |
+| `.meshdone` | Mesh commands completed successfully. |
+| `.samplingdone` | Case directories and sampling files were generated. |
+| `.runprepared` | Run scripts were prepared but simulations were not launched. |
+| `.runsdone` | Local simulations completed successfully. |
+| `.postdone` | Post-processing completed. |
 
-Although the first applications focus on NACA profiles, the structure is intended to support any STL-based airfoil geometry.
+The workflow stores configuration fingerprints in generated campaign, mesh, and
+result metadata. If relevant parameters change, stale prepared outputs are
+regenerated instead of being silently reused.
 
-The project is therefore not limited to NACA profiles. It is designed as a general OpenFOAM-based workflow for automated aerodynamic studies.
+Use `--force` when you intentionally want to regenerate outputs regardless of
+marker state.
+
+## Airfoil Families
+
+Current supported database layout:
+
+```text
+airfoils/database/naca4/naca4412.dat
+airfoils/database/naca5/naca23012.dat
+airfoils/database/naca6/naca63xxx.dat
+```
+
+Only `naca4` is populated today. For future families, add the coordinate files
+under the matching folder and set `family` and `code` in
+`parameters_geometry.ini`.
+
+For an arbitrary profile:
+
+```ini
+[airfoil]
+source = custom
+custom_dat_path = path/to/profile.dat
+```
+
+The STL generator accepts any two-column airfoil coordinate file.

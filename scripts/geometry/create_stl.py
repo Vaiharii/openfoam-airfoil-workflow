@@ -14,13 +14,17 @@ description:
 
 dependencies:
     numpy
-    numpy-stl
+    numpy-stl optional. If it is unavailable, an ASCII STL writer is used.
 """
 
 from pathlib import Path
 
 import numpy as np
-from stl import mesh
+
+try:
+    from stl import mesh
+except ImportError:  # pragma: no cover - exercised only when numpy-stl is absent.
+    mesh = None
 
 def read_airfoil_dat(path: Path | str) -> np.ndarray:
     """
@@ -322,13 +326,52 @@ def write_stl(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if len(triangles) == 0:
         raise ValueError("Cannot write an STL file without triangles.")
-    stl_mesh = mesh.Mesh(np.zeros(len(triangles), dtype=mesh.Mesh.dtype))
-    for i, triangle in enumerate(triangles):
-        stl_mesh.vectors[i] = np.asarray(triangle, dtype=float)
     print(f"Number of triangles : {len(triangles)}")
     print("Saving STL...")
-    stl_mesh.save(str(output_path))
+    if mesh is not None:
+        stl_mesh = mesh.Mesh(np.zeros(len(triangles), dtype=mesh.Mesh.dtype))
+        for i, triangle in enumerate(triangles):
+            stl_mesh.vectors[i] = np.asarray(triangle, dtype=float)
+        stl_mesh.save(str(output_path))
+    else:
+        write_ascii_stl(triangles, output_path)
     print("Done.")
+
+def triangle_normal(triangle: list[np.ndarray]) -> np.ndarray:
+    """
+    Compute a unit normal vector for one triangle.
+
+    Degenerate triangles are assigned a zero normal. This fallback is used
+    when numpy-stl is not installed.
+    """
+    p0, p1, p2 = [np.asarray(point, dtype=float) for point in triangle]
+    normal = np.cross(p1 - p0, p2 - p0)
+    norm = np.linalg.norm(normal)
+    if norm == 0:
+        return np.zeros(3)
+    return normal / norm
+
+def write_ascii_stl(
+    triangles: list[list[np.ndarray]],
+    output_path: Path | str,
+) -> None:
+    """
+    Write an ASCII STL without requiring numpy-stl.
+    """
+    lines = ["solid airfoil"]
+    for triangle in triangles:
+        normal = triangle_normal(triangle)
+        lines.append(
+            f"  facet normal {normal[0]:.12e} {normal[1]:.12e} {normal[2]:.12e}"
+        )
+        lines.append("    outer loop")
+        for point in triangle:
+            p = np.asarray(point, dtype=float)
+            lines.append(f"      vertex {p[0]:.12e} {p[1]:.12e} {p[2]:.12e}")
+        lines.append("    endloop")
+        lines.append("  endfacet")
+    lines.append("endsolid airfoil")
+    Path(output_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 def create_airfoil_stl(
     points: np.ndarray,
